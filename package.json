@@ -1,0 +1,16 @@
+{
+  "name": "ocpp-client-simulator",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "author": "Wirelane Team (Tobias, Bastian, Burak, Andy, Benedikt, Daniel)",
+  "license": "",
+  "dependencies": {
+    "chalk": "^4.1.0",
+    "inquirer": "^7.3.3",
+    "websocket": "^1.0.31"
+  }
+}
