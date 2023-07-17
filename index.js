@@ -1,7 +1,8 @@
 const websocketUrl = process.env.WEBSOCKET_URL;
 const chargingStationSerialNumber = process.env.CHARGING_STATION_SERIAL_NUMBER || '0123456';
+const connectorCount = process.env.CONNECTOR_COUNT || 1;
+const defaultConnectorId = process.env.DEFAULT_CONNECTOR_ID || 1;
 const nfcUid = process.env.NFC_UID;
-const connectorInUse = process.env.CONNECTOR_IN_USE || 1;
 const nfcUidChargingSeconds = process.env.NFC_UID_CHARGING_SECONDS;
 const sendSignedMeterValues = process.env.SEND_SIGNED_METER_VALUES;
 const autoAccept = !!process.env.AUTO_ACCEPT;
@@ -16,19 +17,24 @@ const STATUS_AVAILABLE = 'Available';
 const STATUS_PREPARING = 'Preparing';
 const STATUS_CHARGING = 'Charging';
 
-const PARKING_SPOT_OCCUPANCY_FREE = 'Free';
-const PARKING_SPOT_OCCUPANCY_OCCUPIED = 'Occupied';
+const MESSAGE_TYPE_STATUS_NOTIFICATION = 'StatusNotification';
+const MESSAGE_TYPE_HEARTBEAT = 'Heartbeat';
 
 const sentMsgRegistry = {};
 
-let currentStatus = STATUS_AVAILABLE;
+let remoteRequestedConnectorId = null; // connectorId requested via RemoteStart
+let connectorIdInUse = null; // connectorId for running transaction
 let currentMeter = 10000;
 let transactionId = null;
 let pendingSessionInterval = null;
-let pendingSessionMeterStart = null;
 let pendingSessionStartDate = null;
 
 let configuration = {
+    AuthorizeRemoteTxRequests: {
+        key: 'AuthorizeRemoteTxRequests',
+        readonly: false,
+        value: '0',
+    },
     HeartbeatInterval: {
         key: 'HeartbeatInterval',
         readonly: false,
@@ -37,13 +43,39 @@ let configuration = {
     NumberOfConnectors: {
         key: 'NumberOfConnectors',
         readonly: true,
-        value: process.env.CONNECTOR_COUNT || 1,
-    },
+        value: connectorCount,
+    }
 };
+
 
 const rebootRequiredKeys = [
     // Station-specific
 ];
+
+let statusByConnectorId = []
+let infoByConnectorId = []
+for (let connectorId = 1; connectorId <= connectorCount; connectorId++) {
+    statusByConnectorId[connectorId] = STATUS_AVAILABLE;
+    infoByConnectorId[connectorId] = 'Status Update';
+}
+
+const updateConnectorStatus = (connectorId, status) => {
+    statusByConnectorId[connectorId] = status
+    let info = 'Status Update';
+    // if preparing or charging assume a cable is plugged in - in this case the Bender
+    // controller appends the plugType
+    if (status in [STATUS_PREPARING, STATUS_CHARGING]) {
+        info += ' -' + plugType + '-'
+    }
+}
+
+const getConnectorStatus = (connectorId) => {
+    return statusByConnectorId[connectorId];
+}
+
+const getConnectorInfo = (connectorId) => {
+    return infoByConnectorId[connectorId];
+}
 
 const remoteStartAcceptAsk = () => {
     if (autoAccept) {
@@ -235,53 +267,54 @@ const sendConfirmation = (msgId, data) => {
     ]));
 };
 
-const sendStatus = (trigger) => {
-    console.log('sendStatus:', trigger);
-    let info = 'Status Update';
-    if (currentStatus !== STATUS_AVAILABLE) {
-        info += ' -' + plugType + '-'
-    }
-    for (let connectorId = 1; connectorId <= configuration.NumberOfConnectors.value; connectorId++) {
+const sendHeartbeat = (msgId) => {
+    sendRequest(MESSAGE_TYPE_HEARTBEAT, {});
+}
+
+const sendStatusNotification = (trigger, triggeredConnectorId = null) => {
+    console.log('sendStatusNotification:', trigger, triggeredConnectorId);
+
+    for (let connectorId = 1; connectorId <= connectorCount; connectorId++) {
+        // if status notification is supposed to be sent for a specific connector ignore the other ones
+        console.log(connectorId)
+        if (null !== triggeredConnectorId && triggeredConnectorId !== connectorId) {
+            continue
+        }
+
         console.log('connectorId: ' + connectorId, trigger);
-        sendRequest('StatusNotification', {
+
+        sendRequest(MESSAGE_TYPE_STATUS_NOTIFICATION, {
             connectorId: connectorId,
             errorCode: 'NoError',
-            status: currentStatus,
+            status: getConnectorStatus(connectorId),
             timestamp: (new Date()).toISOString(),
-            info: info
+            info: getConnectorInfo(connectorId)
         });
     }
 };
 
-const sendParkingSpotOccupation = (status) => {
-    const parkingSpotData = {
-        connectorId: 1,
-        status: status,
-        timestamp: (new Date()).toISOString()
 
-    }
+const sendDataTransfer = (vendorId, messageId, data) => {
     sendRequest('DataTransfer', {
-        vendorId: 'com.wirelane',
-        messageId: 'ParkingSpotOccupation',
-        data: JSON.stringify(parkingSpotData)
+        vendorId: vendorId,
+        messageId: messageId,
+        data: JSON.stringify(data)
     });
 }
 
-const startTransaction = (idTag) => {
-    setTimeout(() => {
-        sendParkingSpotOccupation(PARKING_SPOT_OCCUPANCY_OCCUPIED);
-    }, 100);
+const startTransaction = (idTag, connectorId) => {
+    connectorIdInUse = connectorId
 
     setTimeout(() => {
         sendRequest('StartTransaction', {
-            connectorId: connectorInUse,
+            connectorId: connectorIdInUse,
             idTag,
             meterStart: currentMeter,
             timestamp: (new Date()).toISOString()
         });
 
-        currentStatus = STATUS_CHARGING;
-        sendStatus('By startTransaction');
+        updateConnectorStatus(connectorIdInUse, STATUS_CHARGING)
+        sendStatusNotification('By startTransaction', connectorIdInUse);
     }, 500);
 }
 
@@ -292,12 +325,11 @@ const onStartTransactionConfirm = (idTagInfo, returnedTransactionId) => {
     }
 
     transactionId = returnedTransactionId;
-    pendingSessionMeterStart = currentMeter;
     pendingSessionStartDate = new Date();
     pendingSessionInterval = setInterval(() => {
         currentMeter += 100;
         sendRequest("MeterValues", {
-            connectorId: connectorInUse,
+            connectorId: connectorIdInUse,
             transactionId,
             meterValue: [{
                 timestamp: (new Date()).toISOString(),
@@ -354,15 +386,14 @@ const stopTransaction = (nfcUid) => {
 
     sendRequest('StopTransaction', stopData);
 
-    currentStatus = STATUS_AVAILABLE;
-    sendStatus('By stopTransaction');
-
-    sendParkingSpotOccupation(PARKING_SPOT_OCCUPANCY_FREE);
+    updateConnectorStatus(connectorIdInUse, STATUS_AVAILABLE);
+    sendStatusNotification('By stopTransaction', connectorIdInUse);
 
     pendingSessionInterval = null;
     pendingSessionStartDate = null;
-    pendingSessionMeterStart = null;
     transactionId = null;
+    connectorIdInUse = null;
+    remoteRequestedConnectorId = null;
 };
 
 const sendBootNotification = () => {
@@ -386,12 +417,12 @@ const handleChangeConfiguration = (msgId, payload) => {
     let configurationStatus = 'Rejected';
     if (payload.key in configuration) {
         if (!configuration[payload.key].readonly) {
+            configuration[payload.key].value = payload.value
             if (rebootRequiredKeys.includes(payload.key)) {
                 configurationStatus = 'RebootRequired'
             } else {
                 configurationStatus = 'Accepted'
             }
-            
         }
     }
 
@@ -422,6 +453,28 @@ const handleGetConfiguration = (msgId, payload) => {
         unknownKey: unknownKeys,
     });
 };
+
+const handleTriggerMessage = (msgId, payload) => {
+    switch (payload['requestedMessage']) {
+        case MESSAGE_TYPE_HEARTBEAT:
+            sendConfirmation(msgId, {status: 'Accepted'});
+
+            triggeredMessageCb = () => sendHeartbeat();
+            break;
+
+        case MESSAGE_TYPE_STATUS_NOTIFICATION:
+            sendConfirmation(msgId, {status: 'Accepted'});
+
+            triggeredMessageCb = () => sendStatusNotification('By TriggerMessage', payload['connectorId']);
+            break;
+
+        default:
+            sendConfirmation(msgId, {status: 'NotImplemented'});
+            break;
+    }
+
+    setTimeout(triggeredMessageCb, 1000);
+}
 
 const handleUpdateFirmware = (msgId, payload) => {
     sendConfirmation(msgId, {});
@@ -485,13 +538,7 @@ client.onmessage = (e) => {
                 break;
 
             case 'TriggerMessage':
-                if (payload['requestedMessage'] === 'StatusNotification') {
-                    sendConfirmation(msgId, {status: 'Accepted'});
-
-                    setTimeout(() => sendStatus('By TriggerMessage'), 1000);
-                } else {
-                    sendConfirmation(msgId, {status: 'NotImplemented'});
-                }
+                handleTriggerMessage(msgId, payload);
                 break;
 
             case 'UpdateFirmware':
@@ -500,12 +547,18 @@ client.onmessage = (e) => {
 
             case 'RemoteStartTransaction':
                 const idTag = payload['idTag'];
+                // use default connector if no connectorId has been specified
+                remoteRequestedConnectorId = payload['connectorId'] || defaultConnectorId;
                 remoteStartAcceptAsk().then(ret => {
                     if (ret.accept === 'yes') {
                         sendConfirmation(msgId, {status: 'Accepted'});
 
                         setTimeout(() => {
-                            startTransaction(idTag);
+                            if ('1' === configuration.AuthorizeRemoteTxRequests.value) {
+                                sendAuthorize(idTag)
+                            } else {
+                                startTransaction(idTag, remoteRequestedConnectorId);
+                            }
                         }, 500);
                     } else {
                         sendConfirmation(msgId, {status: 'Rejected'});
@@ -597,7 +650,6 @@ client.onmessage = (e) => {
 
 const sendAuthorize = (nfcId) => {
     sendRequest('Authorize', {
-        connectorId: 0,
         idTag: nfcId,
         timestamp: (new Date()).toISOString()
     });
@@ -608,7 +660,7 @@ const onAuthorizeResponse = (idTagInfo) => {
         console.warn('Authorize was not accepted', idTagInfo);
         return;
     }
-    startTransaction(idTagInfo['parentIdTag']);
+    startTransaction(idTagInfo['parentIdTag'], remoteRequestedConnectorId || defaultConnectorId);
 };
 
 client.onopen = () => {
@@ -616,14 +668,10 @@ client.onopen = () => {
 
     sendBootNotification();
 
-    setTimeout(() => {
-        sendParkingSpotOccupation(PARKING_SPOT_OCCUPANCY_FREE);
-    }, 10000);
-
     if (nfcUid != null) {
         setTimeout(() => {
-            currentStatus = STATUS_PREPARING
-            sendStatus('By NFC');
+            updateConnectorStatus(defaultConnectorId, STATUS_PREPARING)
+            sendStatusNotification('By NFC', defaultConnectorId);
         }, 10000);
 
         setTimeout(() => {
