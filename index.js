@@ -17,6 +17,9 @@ const STATUS_AVAILABLE = 'Available';
 const STATUS_PREPARING = 'Preparing';
 const STATUS_CHARGING = 'Charging';
 
+const MESSAGE_TYPE_STATUS_NOTIFICATION = 'StatusNotification';
+const MESSAGE_TYPE_HEARTBEAT = 'Heartbeat';
+
 const PARKING_SPOT_OCCUPANCY_FREE = 'Free';
 const PARKING_SPOT_OCCUPANCY_OCCUPIED = 'Occupied';
 
@@ -268,6 +271,10 @@ const sendConfirmation = (msgId, data) => {
     ]));
 };
 
+const sendHeartbeat = (msgId) => {
+    sendRequest(MESSAGE_TYPE_HEARTBEAT, {});
+}
+
 const sendStatusNotification = (trigger, triggeredConnectorId = null) => {
     console.log('sendStatusNotification:', trigger, triggeredConnectorId);
 
@@ -280,7 +287,7 @@ const sendStatusNotification = (trigger, triggeredConnectorId = null) => {
 
         console.log('connectorId: ' + connectorId, trigger);
 
-        sendRequest('StatusNotification', {
+        sendRequest(MESSAGE_TYPE_STATUS_NOTIFICATION, {
             connectorId: connectorId,
             errorCode: 'NoError',
             status: getConnectorStatus(connectorId),
@@ -465,6 +472,28 @@ const handleGetConfiguration = (msgId, payload) => {
     });
 };
 
+const handleTriggerMessage = (msgId, payload) => {
+    switch (payload['requestedMessage']) {
+        case MESSAGE_TYPE_HEARTBEAT:
+            sendConfirmation(msgId, {status: 'Accepted'});
+
+            triggeredMessageCb = () => sendHeartbeat();
+            break;
+
+        case MESSAGE_TYPE_STATUS_NOTIFICATION:
+            sendConfirmation(msgId, {status: 'Accepted'});
+
+            triggeredMessageCb = () => sendStatusNotification('By TriggerMessage', payload['connectorId']);
+            break;
+
+        default:
+            sendConfirmation(msgId, {status: 'NotImplemented'});
+            break;
+    }
+
+    setTimeout(triggeredMessageCb, 1000);
+}
+
 const handleUpdateFirmware = (msgId, payload) => {
     sendConfirmation(msgId, {});
 
@@ -527,13 +556,7 @@ client.onmessage = (e) => {
                 break;
 
             case 'TriggerMessage':
-                if (payload['requestedMessage'] === 'StatusNotification') {
-                    sendConfirmation(msgId, {status: 'Accepted'});
-
-                    setTimeout(() => sendStatusNotification('By TriggerMessage', payload['connectorId']), 1000);
-                } else {
-                    sendConfirmation(msgId, {status: 'NotImplemented'});
-                }
+                handleTriggerMessage(msgId, payload);
                 break;
 
             case 'UpdateFirmware':
