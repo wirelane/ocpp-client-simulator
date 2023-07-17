@@ -58,16 +58,16 @@ $ WEBSOCKET_URL=wss://ocpp.mycompany.com/cpms/ocppj/DEWLNERTP1 \
     node index.js
 ```
 
-Add number of connectors (CONNECTOR_COUNT) and the connector in use (CONNECTOR_IN_USE) optionally. You can use following command for that
+Add number of connectors (CONNECTOR_COUNT) and the default connector to use for RFID charging or RemoteStartTransaction without connectorId (DEFAULT_CONNECTOR_ID) optionally. You can use following command for that
 ```shell
 $ docker run -it --init \
     -e WEBSOCKET_URL=wss://ocpp.mycompany.com/cpms/ocppj/DEWLNERTP1 \
     -e CONNECTOR_COUNT=3 \
-    -e CONNECTOR_IN_USE=2 \
+    -e DEFAULT_CONNECTOR_ID=2 \
     ocpp-client-simulator
 $ WEBSOCKET_URL=wss://ocpp.mycompany.com/cpms/ocppj/DEWLNERTP1 \
     CONNECTOR_COUNT=3 \
-    CONNECTOR_IN_USE=2 \
+    DEFAULT_CONNECTOR_ID=2 \
     SEND_SIGNED_METER_VALUES=1 \
     node index.js
 ```
