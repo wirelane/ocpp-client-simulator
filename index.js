@@ -20,9 +20,6 @@ const STATUS_CHARGING = 'Charging';
 const MESSAGE_TYPE_STATUS_NOTIFICATION = 'StatusNotification';
 const MESSAGE_TYPE_HEARTBEAT = 'Heartbeat';
 
-const PARKING_SPOT_OCCUPANCY_FREE = 'Free';
-const PARKING_SPOT_OCCUPANCY_OCCUPIED = 'Occupied';
-
 const sentMsgRegistry = {};
 
 let remoteRequestedConnectorId = null; // connectorId requested via RemoteStart
@@ -30,7 +27,6 @@ let connectorIdInUse = null; // connectorId for running transaction
 let currentMeter = 10000;
 let transactionId = null;
 let pendingSessionInterval = null;
-let pendingSessionMeterStart = null;
 let pendingSessionStartDate = null;
 
 let configuration = {
@@ -298,26 +294,16 @@ const sendStatusNotification = (trigger, triggeredConnectorId = null) => {
 };
 
 
-const sendParkingSpotOccupation = (status) => {
-    const parkingSpotData = {
-        connectorId: 1,
-        status: status,
-        timestamp: (new Date()).toISOString()
-
-    }
+const sendDataTransfer = (vendorId, messageId, data) => {
     sendRequest('DataTransfer', {
-        vendorId: 'com.wirelane',
-        messageId: 'ParkingSpotOccupation',
-        data: JSON.stringify(parkingSpotData)
+        vendorId: vendorId,
+        messageId: messageId,
+        data: JSON.stringify(data)
     });
 }
 
 const startTransaction = (idTag, connectorId) => {
     connectorIdInUse = connectorId
-
-    setTimeout(() => {
-        sendParkingSpotOccupation(PARKING_SPOT_OCCUPANCY_OCCUPIED);
-    }, 100);
 
     setTimeout(() => {
         sendRequest('StartTransaction', {
@@ -339,7 +325,6 @@ const onStartTransactionConfirm = (idTagInfo, returnedTransactionId) => {
     }
 
     transactionId = returnedTransactionId;
-    pendingSessionMeterStart = currentMeter;
     pendingSessionStartDate = new Date();
     pendingSessionInterval = setInterval(() => {
         currentMeter += 100;
@@ -404,11 +389,8 @@ const stopTransaction = (nfcUid) => {
     updateConnectorStatus(connectorIdInUse, STATUS_AVAILABLE);
     sendStatusNotification('By stopTransaction', connectorIdInUse);
 
-    sendParkingSpotOccupation(PARKING_SPOT_OCCUPANCY_FREE);
-
     pendingSessionInterval = null;
     pendingSessionStartDate = null;
-    pendingSessionMeterStart = null;
     transactionId = null;
     connectorIdInUse = null;
     remoteRequestedConnectorId = null;
@@ -685,10 +667,6 @@ client.onopen = () => {
     console.log(`WebSocket Client Connected to ${websocketUrl} with auto-accept ${autoAccept}`);
 
     sendBootNotification();
-
-    setTimeout(() => {
-        sendParkingSpotOccupation(PARKING_SPOT_OCCUPANCY_FREE);
-    }, 10000);
 
     if (nfcUid != null) {
         setTimeout(() => {
