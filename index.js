@@ -47,7 +47,6 @@ let configuration = {
     }
 };
 
-
 const rebootRequiredKeys = [
     // Station-specific
 ];
@@ -197,6 +196,28 @@ const updateFirmwareAsk = () => {
         {
             type: 'expand',
             message: 'An UpdateFirmware was received. Should the charging station succeed in updating? ',
+            name: 'accept',
+            choices: [
+                {key: 'y', name: 'Yes', value: 'yes',},
+                {key: 'n', name: 'No', value: 'no',},
+            ],
+        },
+    ]);
+};
+
+const getDiagnosticsAsk = () => {
+    if (autoAccept) {
+        console.log(chalk.bgGreen('AUTO-ACCEPT:') + ' A GetDiagnostics was received and auto-accepted.');
+
+        return Promise.resolve({
+            accept: 'yes'
+        });
+    }
+
+    return inquirer.prompt([
+        {
+            type: 'expand',
+            message: 'An GetDiagnostics was received. Should the charging station succeed in uploading? ',
             name: 'accept',
             choices: [
                 {key: 'y', name: 'Yes', value: 'yes',},
@@ -413,6 +434,13 @@ const sendFirmwareStatusNotification = (status) => {
     });
 };
 
+const sendDiagnosticsStatusNotification = (status) => {
+    // Uploaded, UploadFailed, Uploading, Idle
+    sendRequest('DiagnosticsStatusNotification', {
+        status
+    });
+};
+
 const handleChangeConfiguration = (msgId, payload) => {
     let configurationStatus = 'Rejected';
     if (payload.key in configuration) {
@@ -451,6 +479,22 @@ const handleGetConfiguration = (msgId, payload) => {
     sendConfirmation(msgId, {
         configurationKey: configurationKey,
         unknownKey: unknownKeys,
+    });
+};
+
+const handleGetDiagnostics = (msgId, payload) => {
+    sendConfirmation(msgId, {
+        fileName: Math.ceil(Math.random() * 100000000).toString(10).toString() + '.txt'
+    });
+
+    getDiagnosticsAsk().then(ret => {
+        setTimeout(() => sendDiagnosticsStatusNotification('Uploading'), 1000);
+        if (ret.accept === 'yes') {
+            setTimeout(() => sendFirmwareStatusNotification('Uploaded'), 3000);
+        } else {
+            setTimeout(() => sendFirmwareStatusNotification('UploadFailed'), 1000);
+            
+        }
     });
 };
 
@@ -535,6 +579,10 @@ client.onmessage = (e) => {
             
             case 'GetConfiguration':
                 handleGetConfiguration(msgId, payload);
+                break;
+
+            case 'GetDiagnostics':
+                handleGetDiagnostics(msgId, payload);
                 break;
 
             case 'TriggerMessage':
