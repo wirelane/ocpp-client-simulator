@@ -1,6 +1,7 @@
 const websocketUrl = process.env.WEBSOCKET_URL;
 const chargingStationSerialNumber = process.env.CHARGING_STATION_SERIAL_NUMBER || '0123456';
 const connectorCount = process.env.CONNECTOR_COUNT || 1;
+const heartBeatIntervalSeconds = process.env.HEARTBEAT_INTERVAL_SECONDS || 300;
 const defaultConnectorId = process.env.DEFAULT_CONNECTOR_ID || 1;
 const nfcUid = process.env.NFC_UID;
 const nfcUidChargingSeconds = process.env.NFC_UID_CHARGING_SECONDS;
@@ -27,6 +28,7 @@ let connectorIdInUse = null; // connectorId for running transaction
 let currentMeter = 10000;
 let transactionId = null;
 let pendingSessionInterval = null;
+let heartBeatsInterval = null;
 let pendingSessionStartDate = null;
 
 let configuration = {
@@ -38,7 +40,7 @@ let configuration = {
     HeartbeatInterval: {
         key: 'HeartbeatInterval',
         readonly: false,
-        value: 1000,
+        value: heartBeatIntervalSeconds,
     },
     NumberOfConnectors: {
         key: 'NumberOfConnectors',
@@ -254,6 +256,9 @@ client.onerror = () => {
 };
 
 client.onclose = (event) => {
+    if (heartBeatsInterval) {
+        clearInterval(heartBeatsInterval);
+    }
     console.log(chalk.bgRed('ERROR:') + ` Client Closed (${websocketUrl}), reason: ${event.reason} (${event.code})`);
 };
 
@@ -289,6 +294,7 @@ const sendConfirmation = (msgId, data) => {
 };
 
 const sendHeartbeat = (msgId) => {
+    console.log('sendHeartbeat');
     sendRequest(MESSAGE_TYPE_HEARTBEAT, {});
 }
 
@@ -715,6 +721,8 @@ client.onopen = () => {
     console.log(`WebSocket Client Connected to ${websocketUrl} with auto-accept ${autoAccept}`);
 
     sendBootNotification();
+
+    heartBeatsInterval = setInterval(sendHeartbeat, heartBeatIntervalSeconds * 1000);
 
     if (nfcUid != null) {
         setTimeout(() => {
