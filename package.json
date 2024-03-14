@@ -11,6 +11,7 @@
   "dependencies": {
     "chalk": "^4.1.0",
     "inquirer": "^7.3.3",
+    "log-timestamp": "^0.3.0",
     "websocket": "^1.0.31"
   }
 }

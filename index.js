@@ -1,3 +1,5 @@
+require('log-timestamp');
+
 const websocketUrl = process.env.WEBSOCKET_URL;
 const chargingStationSerialNumber = process.env.CHARGING_STATION_SERIAL_NUMBER || '0123456';
 const connectorCount = process.env.CONNECTOR_COUNT || 1;
