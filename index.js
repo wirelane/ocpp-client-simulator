@@ -697,7 +697,7 @@ client.onmessage = (e) => {
                         sendConfirmation(msgId, {status: 'Rejected'});
                     }
                 });
-
+				break;
             default:
                 console.log(`Unknown action: ${action}`);
         }
