@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+	"dev": "WEBSOCKET_URL=ws://localhost:2999/ocpp/cs1 AUTO_ACCEPT=true node index.js"
   },
   "author": "Wirelane Team (Tobias, Bastian, Burak, Andy, Benedikt, Daniel)",
   "license": "",
