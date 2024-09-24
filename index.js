@@ -428,7 +428,7 @@ const stopTransaction = (nfcUid) => {
 const sendBootNotification = () => {
     sendRequest('BootNotification',
         {
-            chargePointVendor: 'Wirelane',
+            chargePointVendor: 'Batteri',
             chargePointModel: 'NodeJS',
             chargePointSerialNumber: chargingStationSerialNumber
         }
@@ -473,7 +473,7 @@ const handleGetConfiguration = (msgId, payload) => {
 
     // if no key is provided, values for all supported keys should be returned
     if (undefined === payload['key']) {
-        payload['key'] = Object.keys(configuration)
+        payload['key'] = Object.keys(configuration);
     }
 
     payload['key'].forEach(key => {

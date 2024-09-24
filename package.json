@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-	"dev": "WEBSOCKET_URL=ws://localhost:2999/ocpp/cs1 AUTO_ACCEPT=true node index.js"
+	"dev": "WEBSOCKET_URL=ws://localhost:2999/ocpp/cs1 AUTO_ACCEPT=true node index.js",
+	"staging": "WEBSOCKET_URL=wss://csms.batteri-energy.com:443/ocpp/cs1 AUTO_ACCEPT=true node index.js"
   },
   "author": "Wirelane Team (Tobias, Bastian, Burak, Andy, Benedikt, Daniel)",
   "license": "",
