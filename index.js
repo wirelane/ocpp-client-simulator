@@ -67,9 +67,10 @@ const updateConnectorStatus = (connectorId, status) => {
     let info = 'Status Update';
     // if preparing or charging assume a cable is plugged in - in this case the Bender
     // controller appends the plugType
-    if (status in [STATUS_PREPARING, STATUS_CHARGING]) {
+    if ([STATUS_PREPARING, STATUS_CHARGING].some((s) => s === status)) {
         info += ' -' + plugType + '-'
     }
+    infoByConnectorId[connectorId] = info
 }
 
 const getConnectorStatus = (connectorId) => {
