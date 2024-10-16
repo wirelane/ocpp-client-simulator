@@ -715,6 +715,9 @@ const sendAuthorize = (nfcId) => {
 const onAuthorizeResponse = (idTagInfo) => {
     if (idTagInfo['status'] !== 'Accepted') {
         console.warn('Authorize was not accepted', idTagInfo);
+        if (nfcUid != null) {
+            process.exit(1);
+        }
         return;
     }
     startTransaction(idTagInfo['parentIdTag'], remoteRequestedConnectorId || defaultConnectorId);
@@ -740,6 +743,7 @@ client.onopen = () => {
             if (nfcUidChargingSeconds > 0) {
                 setTimeout(() => {
                     stopTransaction(nfcUid);
+                    process.exit()
                 }, nfcUidChargingSeconds * 1000);
             }
         }, 15000);
