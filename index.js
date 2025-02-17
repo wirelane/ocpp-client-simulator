@@ -32,6 +32,7 @@ let transactionId = null;
 let pendingSessionInterval = null;
 let heartBeatsInterval = null;
 let pendingSessionStartDate = null;
+let transactionStart = null;
 
 let configuration = {
     AuthorizeRemoteTxRequests: {
@@ -336,16 +337,46 @@ const startTransaction = (idTag, connectorId) => {
     connectorIdInUse = connectorId
 
     setTimeout(() => {
+        transactionStart = new Date();
         sendRequest('StartTransaction', {
             connectorId: connectorIdInUse,
             idTag,
             meterStart: currentMeter,
-            timestamp: (new Date()).toISOString()
+            timestamp: transactionStart.toISOString()
         });
 
         updateConnectorStatus(connectorIdInUse, STATUS_CHARGING)
         sendStatusNotification('By startTransaction', connectorIdInUse);
     }, 500);
+}
+
+function getRandomPowerActiveValue() {
+    const min = 80550;
+    const max = 80650;
+    const randomValue = Math.random() * (max - min) + min;
+    return Math.round(randomValue * 10) / 10; // Rounds to 1 decimal place
+}
+
+function getRandomVoltageValue() {
+    const min = 231.3000;
+    const max = 232.2667;
+    const randomValue = Math.random() * (max - min) + min;
+    return Math.round(randomValue * 1000) / 1000; // Rounds to 3 decimal place
+}
+
+function getRandomCurrentImportValue() {
+    const min = 124.1000;
+    const max = 126.6000;
+    const randomValue = Math.random() * (max - min) + min;
+    return Math.round(randomValue * 10) / 10; // Rounds to 1 decimal place
+}
+
+function getStateOfCharge() {
+    const currentTime = new Date();
+    const elapsedTime = (currentTime - transactionStart) / 1000;
+    const progress = elapsedTime / nfcUidChargingSeconds;
+
+    return Math.min(1.0, Math.max(0.0, progress));
 }
 
 const onStartTransactionConfirm = (idTagInfo, returnedTransactionId) => {
@@ -358,19 +389,132 @@ const onStartTransactionConfirm = (idTagInfo, returnedTransactionId) => {
     pendingSessionStartDate = new Date();
     pendingSessionInterval = setInterval(() => {
         currentMeter += 100;
+        let powerActiveL1 = getRandomPowerActiveValue();
+        let powerActiveL2 = getRandomPowerActiveValue();
+        let powerActiveL3 = getRandomPowerActiveValue();
+        let voltageL1 = getRandomVoltageValue();
+        let voltageL2 = getRandomVoltageValue();
+        let voltageL3 = getRandomVoltageValue();
         sendRequest("MeterValues", {
             connectorId: connectorIdInUse,
             transactionId,
             meterValue: [{
                 timestamp: (new Date()).toISOString(),
-                sampledValue: [{
+                sampledValue: [
+                {
                     value: currentMeter.toString(10),
                     context: "Sample.Periodic",
                     format: "Raw",
                     measurand: "Energy.Active.Import.Register",
                     location: "Outlet",
                     unit: "Wh"
-                }]
+                },
+                {
+                    value: powerActiveL1+powerActiveL2+powerActiveL3,
+                    context: "Sample.Periodic",
+                    format: "Raw",
+                    measurand: "Power.Active.Import",
+                    location: "Outlet",
+                    unit: "W"
+                },
+                {
+                    value: powerActiveL1,
+                    context: "Sample.Periodic",
+                    format: "Raw",
+                    measurand: "Power.Active.Import",
+                    phase: "L1",
+                    location: "Outlet",
+                    unit: "W"
+                },
+                {
+                    value: powerActiveL2,
+                    context: "Sample.Periodic",
+                    format: "Raw",
+                    measurand: "Power.Active.Import",
+                    phase: "L2",
+                    location: "Outlet",
+                    unit: "W"
+                },
+                {
+                    value: powerActiveL3,
+                    context: "Sample.Periodic",
+                    format: "Raw",
+                    measurand: "Power.Active.Import",
+                    phase: "L3",
+                    location: "Outlet",
+                    unit: "W"
+                },
+                {
+                    value: voltageL1,
+                    context: "Sample.Periodic",
+                    format: "Raw",
+                    measurand: "Voltage",
+                    phase: "L1-N",
+                    location: "Outlet",
+                    unit: "W"
+                },
+                {
+                    value: voltageL2,
+                    context: "Sample.Periodic",
+                    format: "Raw",
+                    measurand: "Voltage",
+                    phase: "L2-N",
+                    location: "Outlet",
+                    unit: "W"
+                },
+                {
+                    value: voltageL3,
+                    context: "Sample.Periodic",
+                    format: "Raw",
+                    measurand: "Voltage",
+                    phase: "L3-N",
+                    location: "Outlet",
+                    unit: "W"
+                },
+                {
+                    value: (voltageL1+voltageL2+voltageL3)/3,
+                    context: "Sample.Periodic",
+                    format: "Raw",
+                    measurand: "Voltage",
+                    location: "Outlet",
+                    unit: "W"
+                },
+                {
+                    value: getRandomCurrentImportValue(),
+                    context: "Sample.Periodic",
+                    format: "Raw",
+                    measurand: "Current.Import",
+                    phase: "L1",
+                    location: "Outlet",
+                    unit: "A"
+                },
+                {
+                    value: getRandomCurrentImportValue(),
+                    context: "Sample.Periodic",
+                    format: "Raw",
+                    measurand: "Current.Import",
+                    phase: "L2",
+                    location: "Outlet",
+                    unit: "A"
+                },
+                {
+                    value: getRandomCurrentImportValue(),
+                    context: "Sample.Periodic",
+                    format: "Raw",
+                    measurand: "Current.Import",
+                    phase: "L3",
+                    location: "Outlet",
+                    unit: "A"
+                },
+                {
+                    value: getStateOfCharge(),
+                    context: "Sample.Periodic",
+                    format: "Raw",
+                    measurand: "SoC",
+                    location: "EV",
+                    unit: "Percent"
+                }
+            ],
             }]
         });
     }, 5000);
