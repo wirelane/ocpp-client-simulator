@@ -10,6 +10,7 @@ const nfcUidChargingSeconds = process.env.NFC_UID_CHARGING_SECONDS;
 const sendSignedMeterValues = process.env.SEND_SIGNED_METER_VALUES;
 const autoAccept = !!process.env.AUTO_ACCEPT;
 const plugType = process.env.PLUG_TYPE || 'Type2'
+const onSitePayment = process.env.ON_SITE_PAYMENT || false;
 
 const W3CWebSocket = require('websocket').w3cwebsocket;
 const client = new W3CWebSocket(websocketUrl);
@@ -345,13 +346,15 @@ const startTransaction = (idTag, connectorId) => {
 
         updateConnectorStatus(connectorIdInUse, STATUS_CHARGING)
         sendStatusNotification('By startTransaction', connectorIdInUse);
-    }, 500);
+    }, 1000);
 }
 
 const onStartTransactionConfirm = (idTagInfo, returnedTransactionId) => {
     if (idTagInfo['status'] !== 'Accepted') {
         console.warn('StartTransaction was not confirmed', idTagInfo, transactionId);
         return;
+    } else {
+        console.info('StartTransaction was confirmed', idTagInfo, transactionId);
     }
 
     transactionId = returnedTransactionId;
@@ -421,7 +424,7 @@ const stopTransaction = (nfcUid) => {
 
     pendingSessionInterval = null;
     pendingSessionStartDate = null;
-    transactionId = null;
+    //transactionId = null;
     connectorIdInUse = null;
     remoteRequestedConnectorId = null;
 };
@@ -549,7 +552,7 @@ const handleUpdateFirmware = (msgId, payload) => {
 
 client.onmessage = (e) => {
     if (typeof e.data === 'string') {
-
+        console.log(e.data)
         const msg = JSON.parse(e.data);
         const msgId = msg[1];
         const action = msg[2];
@@ -574,6 +577,22 @@ client.onmessage = (e) => {
                 case 'StartTransaction':
                     onStartTransactionConfirm(action['idTagInfo'], action['transactionId']);
                     break;
+                case 'DataTransfer':
+                    if ('Authorize' === sentMsgRegistry[msg[1]].data.messageId)
+                    {
+                        startTransaction(nfcUid, defaultConnectorId)
+                    }
+                    break;
+                case 'StopTransaction':
+                    setTimeout(() => {
+                        sendRequest('DataTransfer', {
+                            "vendorId": "OnSitePay",
+                            "messageId": "Receipt",
+                            "data": `{\"merchant\":{\"name\":\"Wirelane GmbH\",\"address\":\"Von-der-Tann Str 12, 80539, MUC\",\"taxId\":\"DE306534423\"},\"chargePoint\":{\"serialNumber\":\"100134119\",\"id\":\"100134119\"},\"chargingProcess\":{\"energyDelivered\":0,\"chargingTime\":407,\"netValueEnergy\":0,\"netPriceEnergy\":0.17,\"netPriceTime\":0.17,\"netValueTime\":1.14,\"netValueTotal\":2.48,\"vat\":0.47,\"vatRate\":19,\"grossValue\":2.95},\"paymentTransaction\":{\"id\":\"51\",\"timestamp\":\"2025-01-29 15:16:27\",\"language\":\"\",\"receiptNo\":\"\",\"aid\":\"A0000003591010028001\",\"vuNumber\":\"\",\"terminalId\":\"71503130\",\"stan\":\"\",\"currency\":\"EUR\",\"paymentType\":\"\",\"card\":{\"type\":\"girocard\",\"pan\":\"6805710705158256363\",\"expiryDate\":\"2812\"},\"authorization\":{\"type\":\"\",\"code\":\"\",\"acknowledgementCode\":\"\"}},\"transactionId\":${transactionId},\"receiptString\":\"         Wirelane GmbH          \\nVon-der-Tann Str 12, 80539, MUC \\n      USt-IdNr.DE306534423      \\n          SN 100134119          \\n        Ch.ID 100134119         \\n                                \\nDatum:       2025-01-29 15:23:43\\nEnergietarif:       0.20 EUR\/kWh\\nZeittarif:          0.20 EUR\/min\\nBlockiergeb\u00FChr:     0.20 EUR\/min\\nEnergie:              1.1950 kWh\\nZeit:                  00h06m47s\\nBlockierzeit:          00h06m47s\\n                                \\nGesamt:                 EUR 2.95\\nMwSt. 19%:              EUR 0.47\\nNetto:                  EUR 2.48\\n                                \\n                                \\n  Thank you for using Wirelane  \\n\\n------------------------------\\n            - Kundenbeleg -\\nWirelane GmbH - Germany\\nVon-der-Tann-Strasse 12\\n80539 Muenchen\\n\\n             Kartenzahlung\\n                girocard\\n\\nBetrag:                         EUR 2,95\\n\\nDatum: 29.01.2025         Zeit: 15:23:43\\nTerminal-Nr.:                   71503130\\nTrace-Nr.:                        000052\\nBeleg:                                10\\nZusatzinformation: 715031301738160176\\nKarten-Nr.:          xxxxxxxxxxxxxxx6363\\nFolge-Nr.:                          0017\\nKartendaten:                  Kontaktlos\\nAID:                              664423\\nVU-Nr.:                       CE37D03130\\n\\n         Autorisierung erfolgt\\n\"}`
+                        });
+                    }, 5000);;
+                    break;
+            
             }
 
             return;
@@ -706,9 +725,10 @@ client.onmessage = (e) => {
 };
 
 const sendAuthorize = (nfcId) => {
-    sendRequest('Authorize', {
-        idTag: nfcId,
-        timestamp: (new Date()).toISOString()
+    sendRequest('DataTransfer', {
+        "vendorId": "OnSitePay",
+        "messageId": "Authorize",
+        "data": `{\"terminalId\": \"71503130\", \"paymentId\":\"${nfcId}\"}`
     });
 };
 
@@ -720,7 +740,7 @@ const onAuthorizeResponse = (idTagInfo) => {
         }
         return;
     }
-    startTransaction(idTagInfo['parentIdTag'], remoteRequestedConnectorId || defaultConnectorId);
+    startTransaction(nfcUid, remoteRequestedConnectorId || defaultConnectorId);
 };
 
 client.onopen = () => {
@@ -743,7 +763,7 @@ client.onopen = () => {
             if (nfcUidChargingSeconds > 0) {
                 setTimeout(() => {
                     stopTransaction(nfcUid);
-                    process.exit()
+                    //process.exit()
                 }, nfcUidChargingSeconds * 1000);
             }
         }, 15000);
