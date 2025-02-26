@@ -71,3 +71,16 @@ $ WEBSOCKET_URL=wss://ocpp.mycompany.com/cpms/ocppj/DEWLNERTP1 \
     SEND_SIGNED_METER_VALUES=1 \
     node index.js
 ```
+
+The following commands simulates a free charging sessions with signed meter values in OCMF format.
+```shell
+$ docker run -it --init \
+    -e WEBSOCKET_URL=wss://ocpp.mycompany.com/cpms/ocppj/DEWLNERTP1 \
+    -e DEFAULT_CONNECTOR_ID=2 \
+    ocpp-client-simulator
+$ WEBSOCKET_URL=wss://ocpp.mycompany.com/cpms/ocppj/DEWLNERTP1 \
+    FREE_CHARGING=1 \
+    SEND_SIGNED_METER_VALUES=1 \
+    NFC_UID=free_charging \
+    node index.js
+```
