@@ -5,11 +5,13 @@ const chargingStationSerialNumber = process.env.CHARGING_STATION_SERIAL_NUMBER |
 const connectorCount = process.env.CONNECTOR_COUNT || 1;
 const heartBeatIntervalSeconds = process.env.HEARTBEAT_INTERVAL_SECONDS || 300;
 const defaultConnectorId = process.env.DEFAULT_CONNECTOR_ID || 1;
-const nfcUid = process.env.NFC_UID;
-const nfcUidChargingSeconds = process.env.NFC_UID_CHARGING_SECONDS;
+const nfcUid = process.env.FREE_CHARGING ? 'free_charging' : process.env.NFC_UID
+const nfcUidChargingSeconds = process.env.NFC_UID_CHARGING_SECONDS || 15;
 const sendSignedMeterValues = process.env.SEND_SIGNED_METER_VALUES;
 const autoAccept = !!process.env.AUTO_ACCEPT;
 const plugType = process.env.PLUG_TYPE || 'Type2'
+const signedMeterValueFormat = process.env.SIGNED_METER_VALUE_FORMAT || 'XML'
+const freeCharging = process.env.FREE_CHARGING || false
 
 const W3CWebSocket = require('websocket').w3cwebsocket;
 const client = new W3CWebSocket(websocketUrl);
@@ -306,12 +308,9 @@ const sendStatusNotification = (trigger, triggeredConnectorId = null) => {
 
     for (let connectorId = 1; connectorId <= connectorCount; connectorId++) {
         // if status notification is supposed to be sent for a specific connector ignore the other ones
-        console.log(connectorId)
         if (null !== triggeredConnectorId && triggeredConnectorId !== connectorId) {
             continue
         }
-
-        console.log('connectorId: ' + connectorId, trigger);
 
         sendRequest(MESSAGE_TYPE_STATUS_NOTIFICATION, {
             connectorId: connectorId,
@@ -351,7 +350,6 @@ const startTransaction = (idTag, connectorId) => {
 const onStartTransactionConfirm = (idTagInfo, returnedTransactionId) => {
     if (idTagInfo['status'] !== 'Accepted') {
         console.warn('StartTransaction was not confirmed', idTagInfo, transactionId);
-        return;
     }
 
     transactionId = returnedTransactionId;
@@ -390,8 +388,21 @@ const stopTransaction = (nfcUid) => {
         transactionId,
     };
     if (sendSignedMeterValues) {
-        stopData['transactionData'] = [
-            {
+        let signedMeterValues = []
+        if ('OCMF' === signedMeterValueFormat) {
+            signedMeterValues.push(
+                {
+                    timestamp: (new Date()).toISOString(),
+                    sampledValue: [{
+                        context: 'Transaction.End',
+                        format: 'SignedData',
+                        value: 'OCMF|{"FV" : "1.0","GI" : "DZG-GSH01.1K2L","GS" : "1DZG0028279595","GV" : "230","PG" : "T14","MV" : "DZG","MM" : "GSH01.1K2L","MS" : "1DZG0028279595","MF" : "230","IS" : true,"IT" : "CENTRAL_1","ID" : "2.3.2_b5564f6f47375f","CT" : "EVSEID","CI" : "1001341201","RD" : [{"TM" : "2025-02-24T16:33:11,000+0100 I","TX" : "B","RV" : "0.000","RI" : "01-00:98.08.00.FF","RU" : "kWh","RT" : "DC","EF" : "","ST" : "G"},{"TM" : "2025-02-24T17:57:15,000+0100 I","TX" : "E","RV" : "63.659","RI" : "01-00:98.08.00.FF","RU" : "kWh","RT" : "DC","EF" : "","ST" : "G"}],"U" : [{"TM" : "2025-02-24T16:33:11,000+0100 I","TX" : "B","RV" : "17.924","RI" : "01-00:9C.08.00.FF","RU" : "kWh","RT" : "DC","EF" : "","ST" : "G"},{"TM" : "2025-02-24T17:57:15,000+0100 I","TX" : "E","RV" : "81.583","RI" : "01-00:9C.08.00.FF","RU" : "kWh","RT" : "DC","EF" : "","ST" : "G"},{"TM" : "2025-02-24T16:33:11,000+0100 I","TX" : "B","RV" : "0.0037","RI" : "01-00:8C.07.00.FF","RU" : "Ohm","RT" : "DC","EF" : "","ST" : "G"},{"TM" : "2025-02-24T17:57:15,000+0100 I","TX" : "E","RV" : "5044","RI" : "01-00:00.08.06.FF","RU" : "s","RT" : "DC","EF" : "","ST" : "G"}]}|{"SA" : "ECDSA-secp256k1-SHA256","SD" : "304402200E2C8A95D4080F4216E1BEE0006E2F43A7FAAD38494522D396A136FA822947CA022079AC9FD0200DE66B8858E0DA26C78288F92E1C62B90EF2371AF068B82188A657"}',
+                        measurand: 'Energy.Active.Import.Register',
+                    }]
+                }
+            )
+        } else {
+            signedMeterValues.push({
                 timestamp: pendingSessionStartDate.toISOString(),
                 sampledValue: [{
                     context: 'Transaction.Begin',
@@ -399,8 +410,8 @@ const stopTransaction = (nfcUid) => {
                     value: '<?xml version="1.0" encoding="UTF-8" ?><signedMeterValue><publicKey encoding="base64">NQu4+D9eJu18mP8kX3h6tLiF3hpvuCdTK2TfqC5ZohGJK0HY4sMXi2l9a4AyBBuT</publicKey><meterValueSignature encoding="base64">e+1UrGquU5pq15VxoNuV2SyN1oua1ZXOtK66ZyW5ppnUfmZKvTZSSWncdMfNHb4ZABk=</meterValueSignature><signatureMethod>ECDSA192SHA256</signatureMethod><encodingMethod>EDL</encodingMethod><encodedMeterValue encoding="base64">CQFFTUgAAH+IOU8W7FwIoLkGACEAAAABAAERAP8e/yVXAAAAAAAAABkEHwBqNFuEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE4W7FwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=</encodedMeterValue></signedMeterValue>',
                     measurand: 'Energy.Active.Import.Register',
                 }]
-            },
-            {
+            })
+            signedMeterValues.push({
                 timestamp: (new Date()).toISOString(),
                 sampledValue: [{
                     context: 'Transaction.End',
@@ -408,8 +419,9 @@ const stopTransaction = (nfcUid) => {
                     value: '<?xml version="1.0" encoding="UTF-8" ?><signedMeterValue><publicKey encoding="base64">NQu4+D9eJu18mP8kX3h6tLiF3hpvuCdTK2TfqC5ZohGJK0HY4sMXi2l9a4AyBBuT</publicKey><meterValueSignature encoding="base64">T6CDMPIpFcqom1z4cOI1HTfjqCvOfCvJjwVlLoEJInO/RcZQLGb5kbj21920UWaXABk=</meterValueSignature><signatureMethod>ECDSA192SHA256</signatureMethod><encodingMethod>EDL</encodingMethod><encodedMeterValue encoding="base64">CQFFTUgAAH+IOfoj7FwIS8cGACYAAAABAAERAP8e/yVXAAAAAAAAABkEHwBqNFuEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGAj7FwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=</encodedMeterValue></signedMeterValue>',
                     measurand: 'Energy.Active.Import.Register',
                 }]
-            }
-        ];
+            })
+        }
+        stopData['transactionData'] = signedMeterValues
     }
 
     console.log(JSON.stringify(stopData));
@@ -715,10 +727,12 @@ const sendAuthorize = (nfcId) => {
 const onAuthorizeResponse = (idTagInfo) => {
     if (idTagInfo['status'] !== 'Accepted') {
         console.warn('Authorize was not accepted', idTagInfo);
-        if (nfcUid != null) {
-            process.exit(1);
+        if (!freeCharging) {
+            if (nfcUid != null) {
+                process.exit(1);
+            }
+            return;
         }
-        return;
     }
     startTransaction(idTagInfo['parentIdTag'], remoteRequestedConnectorId || defaultConnectorId);
 };
