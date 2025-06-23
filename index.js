@@ -60,7 +60,7 @@ const rebootRequiredKeys = [
 let statusByConnectorId = []
 let infoByConnectorId = []
 for (let connectorId = 1; connectorId <= connectorCount; connectorId++) {
-    statusByConnectorId[connectorId] = STATUS_AVAILABLE;
+    statusByConnectorId[connectorId] = STATUS_PREPARING;
     infoByConnectorId[connectorId] = 'Status Update';
 }
 
@@ -371,7 +371,7 @@ const onStartTransactionConfirm = (idTagInfo, returnedTransactionId) => {
                 }]
             }]
         });
-    }, 5000);
+    }, 1000);
 };
 
 const stopTransaction = (nfcUid) => {
@@ -428,7 +428,7 @@ const stopTransaction = (nfcUid) => {
 
     sendRequest('StopTransaction', stopData);
 
-    updateConnectorStatus(connectorIdInUse, STATUS_AVAILABLE);
+    updateConnectorStatus(connectorIdInUse, STATUS_PREPARING);
     sendStatusNotification('By stopTransaction', connectorIdInUse);
 
     pendingSessionInterval = null;
