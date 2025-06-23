@@ -535,7 +535,7 @@ const handleTriggerMessage = (msgId, payload) => {
 
         default:
             sendConfirmation(msgId, {status: 'NotImplemented'});
-            break;
+            return;
     }
 
     setTimeout(triggeredMessageCb, 1000);
