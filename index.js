@@ -408,7 +408,7 @@ const onStartTransactionConfirm = (idTagInfo, returnedTransactionId) => {
                     unit: "Wh"
                 },
                 {
-                    value: powerActiveL1+powerActiveL2+powerActiveL3,
+                    value: (powerActiveL1+powerActiveL2+powerActiveL3).toString(),
                     context: "Sample.Periodic",
                     format: "Raw",
                     measurand: "Power.Active.Import",
@@ -416,7 +416,7 @@ const onStartTransactionConfirm = (idTagInfo, returnedTransactionId) => {
                     unit: "W"
                 },
                 {
-                    value: powerActiveL1,
+                    value: powerActiveL1.toString(),
                     context: "Sample.Periodic",
                     format: "Raw",
                     measurand: "Power.Active.Import",
@@ -425,7 +425,7 @@ const onStartTransactionConfirm = (idTagInfo, returnedTransactionId) => {
                     unit: "W"
                 },
                 {
-                    value: powerActiveL2,
+                    value: powerActiveL2.toString(),
                     context: "Sample.Periodic",
                     format: "Raw",
                     measurand: "Power.Active.Import",
@@ -434,7 +434,7 @@ const onStartTransactionConfirm = (idTagInfo, returnedTransactionId) => {
                     unit: "W"
                 },
                 {
-                    value: powerActiveL3,
+                    value: powerActiveL3.toString(),
                     context: "Sample.Periodic",
                     format: "Raw",
                     measurand: "Power.Active.Import",
@@ -443,7 +443,7 @@ const onStartTransactionConfirm = (idTagInfo, returnedTransactionId) => {
                     unit: "W"
                 },
                 {
-                    value: voltageL1,
+                    value: voltageL1.toString(),
                     context: "Sample.Periodic",
                     format: "Raw",
                     measurand: "Voltage",
@@ -452,7 +452,7 @@ const onStartTransactionConfirm = (idTagInfo, returnedTransactionId) => {
                     unit: "W"
                 },
                 {
-                    value: voltageL2,
+                    value: voltageL2.toString(),
                     context: "Sample.Periodic",
                     format: "Raw",
                     measurand: "Voltage",
@@ -461,7 +461,7 @@ const onStartTransactionConfirm = (idTagInfo, returnedTransactionId) => {
                     unit: "W"
                 },
                 {
-                    value: voltageL3,
+                    value: voltageL3.toString(),
                     context: "Sample.Periodic",
                     format: "Raw",
                     measurand: "Voltage",
@@ -470,15 +470,7 @@ const onStartTransactionConfirm = (idTagInfo, returnedTransactionId) => {
                     unit: "W"
                 },
                 {
-                    value: (voltageL1+voltageL2+voltageL3)/3,
-                    context: "Sample.Periodic",
-                    format: "Raw",
-                    measurand: "Voltage",
-                    location: "Outlet",
-                    unit: "W"
-                },
-                {
-                    value: getRandomCurrentImportValue(),
+                    value: getRandomCurrentImportValue().toString(),
                     context: "Sample.Periodic",
                     format: "Raw",
                     measurand: "Current.Import",
@@ -487,7 +479,7 @@ const onStartTransactionConfirm = (idTagInfo, returnedTransactionId) => {
                     unit: "A"
                 },
                 {
-                    value: getRandomCurrentImportValue(),
+                    value: getRandomCurrentImportValue().toString(),
                     context: "Sample.Periodic",
                     format: "Raw",
                     measurand: "Current.Import",
@@ -496,7 +488,7 @@ const onStartTransactionConfirm = (idTagInfo, returnedTransactionId) => {
                     unit: "A"
                 },
                 {
-                    value: getRandomCurrentImportValue(),
+                    value: getRandomCurrentImportValue().toString(),
                     context: "Sample.Periodic",
                     format: "Raw",
                     measurand: "Current.Import",
@@ -505,7 +497,7 @@ const onStartTransactionConfirm = (idTagInfo, returnedTransactionId) => {
                     unit: "A"
                 },
                 {
-                    value: getStateOfCharge(),
+                    value: getStateOfCharge().toString(),
                     context: "Sample.Periodic",
                     format: "Raw",
                     measurand: "SoC",
