@@ -518,10 +518,17 @@ const onStartTransactionConfirm = (idTagInfo, returnedTransactionId) => {
     }, 5000);
 };
 
-const stopTransaction = (nfcUid) => {
+const stopTransaction = (nfcUid, payload=null) => {
     if (pendingSessionInterval === null) {
         console.warn('No running transaction');
-        return;
+
+        if (null === payload){
+            console.warn('Not sending stopTransaction!');
+            return;
+        } else {
+            console.warn('Sending stopTransaction with potentially invalid values!');
+            transactionId = payload.transactionId;
+        }
     }
     clearInterval(pendingSessionInterval);
 
@@ -785,7 +792,7 @@ client.onmessage = (e) => {
                         sendConfirmation(msgId, {status: 'Accepted'});
 
                         setTimeout(() => {
-                            stopTransaction(nfcUid);
+                            stopTransaction(nfcUid, payload);
                         }, 500);
                     } else {
                         sendConfirmation(msgId, {status: 'Rejected'});
