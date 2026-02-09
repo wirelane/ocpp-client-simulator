@@ -662,9 +662,9 @@ const handleGetDiagnostics = (msgId, payload) => {
     getDiagnosticsAsk().then(ret => {
         setTimeout(() => sendDiagnosticsStatusNotification('Uploading'), 1000);
         if (ret.accept === 'yes') {
-            setTimeout(() => sendFirmwareStatusNotification('Uploaded'), 3000);
+            setTimeout(() => sendDiagnosticsStatusNotification('Uploaded'), 3000);
         } else {
-            setTimeout(() => sendFirmwareStatusNotification('UploadFailed'), 1000);
+            setTimeout(() => sendDiagnosticsStatusNotification('UploadFailed'), 1000);
             
         }
     });
