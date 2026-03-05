@@ -14,7 +14,7 @@ const signedMeterValueFormat = process.env.SIGNED_METER_VALUE_FORMAT || 'XML'
 const freeCharging = process.env.FREE_CHARGING || false
 
 const W3CWebSocket = require('websocket').w3cwebsocket;
-const client = new W3CWebSocket(websocketUrl);
+const client = new W3CWebSocket(websocketUrl, ['ocpp1.6']);
 const inquirer = require('inquirer');
 const chalk = require('chalk');
 
@@ -885,7 +885,7 @@ const onAuthorizeResponse = (idTagInfo) => {
             return;
         }
     }
-    startTransaction(idTagInfo['parentIdTag'], remoteRequestedConnectorId || defaultConnectorId);
+    startTransaction(nfcUid, remoteRequestedConnectorId || defaultConnectorId);
 };
 
 client.onopen = () => {
