@@ -1,0 +1,9 @@
+services:
+  ocpp-client-simulator:
+    build: .
+    image: ocpp-client-simulator
+    init: true
+    stdin_open: true
+    tty: true
+    env_file:
+      - .env
