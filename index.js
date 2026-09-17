@@ -636,7 +636,7 @@ const handleGetConfiguration = (msgId, payload) => {
     const unknownKeys = [];
 
     // if no key is provided, values for all supported keys should be returned
-    if (undefined === payload['key']) {
+    if (undefined === payload['key'] || payload['key'].length === 0) {
         payload['key'] = Object.keys(configuration)
     }
 
