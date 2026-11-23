@@ -2,9 +2,10 @@ require('log-timestamp');
 
 const websocketUrl = process.env.WEBSOCKET_URL;
 const chargingStationSerialNumber = process.env.CHARGING_STATION_SERIAL_NUMBER || '0123456';
-const connectorCount = process.env.CONNECTOR_COUNT || 1;
+const connectorCount = parseInt(process.env.CONNECTOR_COUNT || '1', 10);
 const heartBeatIntervalSeconds = process.env.HEARTBEAT_INTERVAL_SECONDS || 300;
-const defaultConnectorId = process.env.DEFAULT_CONNECTOR_ID || 1;
+// parsed, as sendStatusNotification compares connector ids strictly against the numeric loop index
+const defaultConnectorId = parseInt(process.env.DEFAULT_CONNECTOR_ID || '1', 10);
 const nfcUid = process.env.FREE_CHARGING ? 'free_charging' : process.env.NFC_UID
 const nfcUidChargingSeconds = process.env.NFC_UID_CHARGING_SECONDS || 15;
 const sendSignedMeterValues = process.env.SEND_SIGNED_METER_VALUES;
@@ -12,6 +13,10 @@ const autoAccept = !!process.env.AUTO_ACCEPT;
 const plugType = process.env.PLUG_TYPE || 'Type2'
 const signedMeterValueFormat = process.env.SIGNED_METER_VALUE_FORMAT || 'XML'
 const freeCharging = process.env.FREE_CHARGING || false
+// simulates plugging a cable into the default connector (Preparing + "Status Update -<PLUG_TYPE>-" info, as
+// sent by Bender controllers), e.g. to reserve a payment terminal and then wait for its RemoteStart
+const cableConnected = !!process.env.CABLE_CONNECTED;
+const cableConnectedDelaySeconds = parseInt(process.env.CABLE_CONNECTED_DELAY_SECONDS || '10', 10);
 
 const W3CWebSocket = require('websocket').w3cwebsocket;
 const client = new W3CWebSocket(websocketUrl);
@@ -894,6 +899,15 @@ client.onopen = () => {
     sendBootNotification();
 
     heartBeatsInterval = setInterval(sendHeartbeat, heartBeatIntervalSeconds * 1000);
+
+    // the NFC flow below plugs the cable itself
+    if (cableConnected && nfcUid == null) {
+        setTimeout(() => {
+            console.log(`Plugging a ${plugType} cable into connector ${defaultConnectorId}, waiting for a RemoteStart`);
+            updateConnectorStatus(defaultConnectorId, STATUS_PREPARING);
+            sendStatusNotification('By cable connected', defaultConnectorId);
+        }, cableConnectedDelaySeconds * 1000);
+    }
 
     if (nfcUid != null) {
         setTimeout(() => {

@@ -72,6 +72,21 @@ $ WEBSOCKET_URL=wss://ocpp.mycompany.com/cpms/ocppj/DEWLNERTP1 \
     node index.js
 ```
 
+To test charging via a payment terminal, add CABLE_CONNECTED=1. After CABLE_CONNECTED_DELAY_SECONDS (default 10) the default connector
+goes to `Preparing` with the info `Status Update -<PLUG_TYPE>-` (PLUG_TYPE defaults to `Type2`), which is how a Bender controller reports a
+plugged cable. The backend then reserves the payment terminal, and the simulator waits for the RemoteStart sent after the payment:
+```shell
+$ docker run -it --init \
+    -e WEBSOCKET_URL=wss://ocpp.mycompany.com/cpms/ocppj/DEWLNERTP1 \
+    -e CABLE_CONNECTED=1 \
+    -e AUTO_ACCEPT=true \
+    ocpp-client-simulator
+$ WEBSOCKET_URL=wss://ocpp.mycompany.com/cpms/ocppj/DEWLNERTP1 \
+    CABLE_CONNECTED=1 \
+    AUTO_ACCEPT=true \
+    node index.js
+```
+
 The following commands simulates a free charging sessions with signed meter values in OCMF format.
 ```shell
 $ docker run -it --init \
