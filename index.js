@@ -50,12 +50,13 @@ let configuration = {
     HeartbeatInterval: {
         key: 'HeartbeatInterval',
         readonly: false,
-        value: heartBeatIntervalSeconds,
+        // OCPP 1.6 KeyValue.value is a string
+        value: String(heartBeatIntervalSeconds),
     },
     NumberOfConnectors: {
         key: 'NumberOfConnectors',
         readonly: true,
-        value: connectorCount,
+        value: String(connectorCount),
     }
 };
 
