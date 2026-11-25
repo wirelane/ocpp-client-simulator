@@ -605,6 +605,27 @@ const sendBootNotification = () => {
     );
 }
 
+let cablePlugScheduled = false;
+
+const onBootNotificationConfirm = () => {
+    // like a rebooted station, report every connector as Available, so a connector a previous run left
+    // Preparing changes status again and the server reacts to the next Preparing
+    for (let connectorId = 1; connectorId <= connectorCount; connectorId++) {
+        updateConnectorStatus(connectorId, STATUS_AVAILABLE);
+    }
+    sendStatusNotification('By BootNotification');
+
+    // the NFC flow plugs the cable itself; plug only once, not again after a Reset or firmware update
+    if (cableConnected && nfcUid == null && !cablePlugScheduled) {
+        cablePlugScheduled = true;
+        setTimeout(() => {
+            console.log(`Plugging a ${plugType} cable into connector ${defaultConnectorId}, waiting for a RemoteStart`);
+            updateConnectorStatus(defaultConnectorId, STATUS_PREPARING);
+            sendStatusNotification('By cable connected', defaultConnectorId);
+        }, cableConnectedDelaySeconds * 1000);
+    }
+};
+
 const sendFirmwareStatusNotification = (status) => {
     // Downloaded, DownloadFailed, Downloading, Idle, InstallationFailed, Installing, Installed
     sendRequest('FirmwareStatusNotification', {
@@ -742,6 +763,9 @@ client.onmessage = (e) => {
                     break;
                 case 'StartTransaction':
                     onStartTransactionConfirm(action['idTagInfo'], action['transactionId']);
+                    break;
+                case 'BootNotification':
+                    onBootNotificationConfirm();
                     break;
             }
 
@@ -900,15 +924,6 @@ client.onopen = () => {
     sendBootNotification();
 
     heartBeatsInterval = setInterval(sendHeartbeat, heartBeatIntervalSeconds * 1000);
-
-    // the NFC flow below plugs the cable itself
-    if (cableConnected && nfcUid == null) {
-        setTimeout(() => {
-            console.log(`Plugging a ${plugType} cable into connector ${defaultConnectorId}, waiting for a RemoteStart`);
-            updateConnectorStatus(defaultConnectorId, STATUS_PREPARING);
-            sendStatusNotification('By cable connected', defaultConnectorId);
-        }, cableConnectedDelaySeconds * 1000);
-    }
 
     if (nfcUid != null) {
         setTimeout(() => {
