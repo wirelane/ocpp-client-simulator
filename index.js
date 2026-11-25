@@ -2,9 +2,10 @@ require('log-timestamp');
 
 const websocketUrl = process.env.WEBSOCKET_URL;
 const chargingStationSerialNumber = process.env.CHARGING_STATION_SERIAL_NUMBER || '0123456';
-const connectorCount = process.env.CONNECTOR_COUNT || 1;
+const connectorCount = parseInt(process.env.CONNECTOR_COUNT || '1', 10);
 const heartBeatIntervalSeconds = process.env.HEARTBEAT_INTERVAL_SECONDS || 300;
-const defaultConnectorId = process.env.DEFAULT_CONNECTOR_ID || 1;
+// parsed, as sendStatusNotification compares connector ids strictly against the numeric loop index
+const defaultConnectorId = parseInt(process.env.DEFAULT_CONNECTOR_ID || '1', 10);
 const nfcUid = process.env.FREE_CHARGING ? 'free_charging' : process.env.NFC_UID
 const nfcUidChargingSeconds = process.env.NFC_UID_CHARGING_SECONDS || 15;
 const sendSignedMeterValues = process.env.SEND_SIGNED_METER_VALUES;
@@ -12,11 +13,24 @@ const autoAccept = !!process.env.AUTO_ACCEPT;
 const plugType = process.env.PLUG_TYPE || 'Type2'
 const signedMeterValueFormat = process.env.SIGNED_METER_VALUE_FORMAT || 'XML'
 const freeCharging = process.env.FREE_CHARGING || false
+// simulates plugging a cable into the default connector (Preparing + "Status Update -<PLUG_TYPE>-" info, as
+// sent by Bender controllers), e.g. to reserve a payment terminal and then wait for its RemoteStart
+const cableConnected = !!process.env.CABLE_CONNECTED;
+const cableConnectedDelaySeconds = parseInt(process.env.CABLE_CONNECTED_DELAY_SECONDS || '10', 10);
+// optional: stop the cable-connected session after this many seconds and exit; unset waits for a RemoteStop
+const cableConnectedChargingSeconds = parseInt(process.env.CABLE_CONNECTED_CHARGING_SECONDS || '0', 10);
+
+const chalk = require('chalk');
+
+// ocpp-server only treats "Status Update -<plug type>-" as a plugged cable when the plug type matches this
+if (cableConnected && !/^[a-zA-Z0-9 ]+$/.test(plugType)) {
+    console.warn(chalk.bgYellow('WARNING:') + ` PLUG_TYPE "${plugType}" may only contain letters, digits and spaces, `
+        + 'otherwise the backend does not recognise the plugged cable and reserves no payment terminal');
+}
 
 const W3CWebSocket = require('websocket').w3cwebsocket;
 const client = new W3CWebSocket(websocketUrl);
 const inquirer = require('inquirer');
-const chalk = require('chalk');
 
 const STATUS_AVAILABLE = 'Available';
 const STATUS_PREPARING = 'Preparing';
@@ -31,6 +45,7 @@ let remoteRequestedConnectorId = null; // connectorId requested via RemoteStart
 let connectorIdInUse = null; // connectorId for running transaction
 let currentMeter = 10000;
 let transactionId = null;
+let transactionIdTag = null; // idTag the running transaction was started with
 let pendingSessionInterval = null;
 let heartBeatsInterval = null;
 let pendingSessionStartDate = null;
@@ -45,12 +60,13 @@ let configuration = {
     HeartbeatInterval: {
         key: 'HeartbeatInterval',
         readonly: false,
-        value: heartBeatIntervalSeconds,
+        // OCPP 1.6 KeyValue.value is a string
+        value: String(heartBeatIntervalSeconds),
     },
     NumberOfConnectors: {
         key: 'NumberOfConnectors',
         readonly: true,
-        value: connectorCount,
+        value: String(connectorCount),
     }
 };
 
@@ -334,6 +350,7 @@ const sendDataTransfer = (vendorId, messageId, data) => {
 
 const startTransaction = (idTag, connectorId) => {
     connectorIdInUse = connectorId
+    transactionIdTag = idTag
 
     setTimeout(() => {
         transactionStart = new Date();
@@ -385,6 +402,18 @@ const onStartTransactionConfirm = (idTagInfo, returnedTransactionId) => {
 
     transactionId = returnedTransactionId;
     pendingSessionStartDate = new Date();
+
+    // the NFC flow stops its session itself
+    if (cableConnected && nfcUid == null && cableConnectedChargingSeconds > 0) {
+        setTimeout(() => {
+            if (transactionId === returnedTransactionId) {
+                stopTransaction(transactionIdTag);
+            }
+            // give the StopTransaction time to be sent before exiting
+            setTimeout(() => process.exit(), 1000);
+        }, cableConnectedChargingSeconds * 1000);
+    }
+
     pendingSessionInterval = setInterval(() => {
         currentMeter += 100;
         let powerActiveL1 = getRandomPowerActiveValue();
@@ -599,6 +628,27 @@ const sendBootNotification = () => {
     );
 }
 
+let cablePlugScheduled = false;
+
+const onBootNotificationConfirm = () => {
+    // like a rebooted station, report every connector as Available, so a connector a previous run left
+    // Preparing changes status again and the server reacts to the next Preparing
+    for (let connectorId = 1; connectorId <= connectorCount; connectorId++) {
+        updateConnectorStatus(connectorId, STATUS_AVAILABLE);
+    }
+    sendStatusNotification('By BootNotification');
+
+    // the NFC flow plugs the cable itself; plug only once, not again after a Reset or firmware update
+    if (cableConnected && nfcUid == null && !cablePlugScheduled) {
+        cablePlugScheduled = true;
+        setTimeout(() => {
+            console.log(`Plugging a ${plugType} cable into connector ${defaultConnectorId}, waiting for a RemoteStart`);
+            updateConnectorStatus(defaultConnectorId, STATUS_PREPARING);
+            sendStatusNotification('By cable connected', defaultConnectorId);
+        }, cableConnectedDelaySeconds * 1000);
+    }
+};
+
 const sendFirmwareStatusNotification = (status) => {
     // Downloaded, DownloadFailed, Downloading, Idle, InstallationFailed, Installing, Installed
     sendRequest('FirmwareStatusNotification', {
@@ -736,6 +786,9 @@ client.onmessage = (e) => {
                     break;
                 case 'StartTransaction':
                     onStartTransactionConfirm(action['idTagInfo'], action['transactionId']);
+                    break;
+                case 'BootNotification':
+                    onBootNotificationConfirm();
                     break;
             }
 
