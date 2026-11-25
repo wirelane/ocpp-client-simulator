@@ -18,9 +18,28 @@ $ docker build . -t ocpp-client-simulator
 npm ci
 ```
 
+## Compose
+
+A `compose.yaml` is included for running the simulator with Docker Compose or a compatible tool. Configuration is read from a `.env` file next to it:
+
+```shell
+$ cp .env.example .env
+$ docker compose up --build
+```
+
+`.env.example` lists all supported variables. Only `WEBSOCKET_URL` is required.
+
+If you need to control whether the station should accept or reject a remote command (e.g. to simulate an error scenario), remove `AUTO_ACCEPT` from `.env`.
+Any value, including `false`, enables auto-accept. The simulator then asks interactively, so start it with `run` to get an interactive terminal:
+
+```shell
+$ docker compose run --rm ocpp-client-simulator
+```
+
 ## Run
 
 For each command, both the docker command and the local Node.JS-based variant is given.
+The same parameters can be set in `.env` when using compose.
 
 ```shell
 $ docker run -it --init \
