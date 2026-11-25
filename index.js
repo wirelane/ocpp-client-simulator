@@ -17,11 +17,20 @@ const freeCharging = process.env.FREE_CHARGING || false
 // sent by Bender controllers), e.g. to reserve a payment terminal and then wait for its RemoteStart
 const cableConnected = !!process.env.CABLE_CONNECTED;
 const cableConnectedDelaySeconds = parseInt(process.env.CABLE_CONNECTED_DELAY_SECONDS || '10', 10);
+// optional: stop the cable-connected session after this many seconds and exit; unset waits for a RemoteStop
+const cableConnectedChargingSeconds = parseInt(process.env.CABLE_CONNECTED_CHARGING_SECONDS || '0', 10);
+
+const chalk = require('chalk');
+
+// ocpp-server only treats "Status Update -<plug type>-" as a plugged cable when the plug type matches this
+if (cableConnected && !/^[a-zA-Z0-9 ]+$/.test(plugType)) {
+    console.warn(chalk.bgYellow('WARNING:') + ` PLUG_TYPE "${plugType}" may only contain letters, digits and spaces, `
+        + 'otherwise the backend does not recognise the plugged cable and reserves no payment terminal');
+}
 
 const W3CWebSocket = require('websocket').w3cwebsocket;
 const client = new W3CWebSocket(websocketUrl);
 const inquirer = require('inquirer');
-const chalk = require('chalk');
 
 const STATUS_AVAILABLE = 'Available';
 const STATUS_PREPARING = 'Preparing';
@@ -36,6 +45,7 @@ let remoteRequestedConnectorId = null; // connectorId requested via RemoteStart
 let connectorIdInUse = null; // connectorId for running transaction
 let currentMeter = 10000;
 let transactionId = null;
+let transactionIdTag = null; // idTag the running transaction was started with
 let pendingSessionInterval = null;
 let heartBeatsInterval = null;
 let pendingSessionStartDate = null;
@@ -340,6 +350,7 @@ const sendDataTransfer = (vendorId, messageId, data) => {
 
 const startTransaction = (idTag, connectorId) => {
     connectorIdInUse = connectorId
+    transactionIdTag = idTag
 
     setTimeout(() => {
         transactionStart = new Date();
@@ -391,6 +402,18 @@ const onStartTransactionConfirm = (idTagInfo, returnedTransactionId) => {
 
     transactionId = returnedTransactionId;
     pendingSessionStartDate = new Date();
+
+    // the NFC flow stops its session itself
+    if (cableConnected && nfcUid == null && cableConnectedChargingSeconds > 0) {
+        setTimeout(() => {
+            if (transactionId === returnedTransactionId) {
+                stopTransaction(transactionIdTag);
+            }
+            // give the StopTransaction time to be sent before exiting
+            setTimeout(() => process.exit(), 1000);
+        }, cableConnectedChargingSeconds * 1000);
+    }
+
     pendingSessionInterval = setInterval(() => {
         currentMeter += 100;
         let powerActiveL1 = getRandomPowerActiveValue();
